@@ -1,6 +1,7 @@
 """
 Interfaz Gradio para el agente Full Stack.
 Ejecutar con: python -m ui.gradio_app
+La configuración de la UI se lee desde lib/config/settings.yaml (gradio section).
 """
 import sys
 import os
@@ -8,12 +9,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import gradio as gr
 from e2b_code_interpreter import Sandbox
+
+from lib.config import cfg
 from main import build_agent, run_task
 
 
 def create_ui() -> gr.Blocks:
     """Crea la interfaz Gradio con historial de conversación persistente."""
-    sbx = Sandbox(timeout=60 * 60)
+    sbx = Sandbox(timeout=cfg.sandbox.timeout_seconds)
     agent, model = build_agent(sbx)
 
     def chat(user_message: str, history: list) -> tuple[str, list]:
@@ -23,9 +26,9 @@ def create_ui() -> gr.Blocks:
         history.append((user_message, reply))
         return "", history
 
-    def reset() -> tuple[list, list]:
+    def reset() -> tuple[list, str]:
         agent.messages = []
-        return [], []
+        return [], ""
 
     with gr.Blocks(theme=gr.themes.Soft(), title="Agente Full Stack 🤖") as demo:
         gr.Markdown("# 🤖 Agente Full Stack — Next.js + AWS Bedrock + E2B")
@@ -60,4 +63,4 @@ def create_ui() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    create_ui().launch(share=False, height=700)
+    create_ui().launch(share=cfg.gradio.share, height=cfg.gradio.height)

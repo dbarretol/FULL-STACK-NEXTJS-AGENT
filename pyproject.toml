@@ -5,8 +5,9 @@ description = "Agente autónomo que genera aplicaciones Next.js completas usando
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "strands-agents>=0.1.0",
+    "strands-agents>=1.0.0",
     "strands-agents-tools>=0.1.0",
     "e2b-code-interpreter>=1.0.0",
     "gradio>=4.0.0",
+    "pyyaml>=6.0",
 ]

@@ -1,0 +1,80 @@
+# ============================================================
+# Configuración central del agente Full Stack
+# Modifica este archivo para ajustar el comportamiento sin
+# tocar el código fuente.
+# ============================================================
+
+# --- Proveedor LLM activo ---
+# Valores posibles: "bedrock" | "anthropic" | "openai" | "gemini" | "llamaapi"
+llm_provider: "bedrock"
+
+# --- Configuración de modelos por proveedor ---
+models:
+  bedrock:
+    model_id: "amazon.nova-pro-v1:0"
+    region_name: "us-east-1"   # Sobreescrito por AWS_REGION si está definido
+    temperature: 0.2
+    max_tokens: 4096
+    streaming: true
+
+  anthropic:
+    model_id: "claude-sonnet-4-20250514"
+    max_tokens: 4096
+    temperature: 0.2
+
+  openai:
+    model_id: "gpt-4o"
+    max_tokens: 4096
+    temperature: 0.2
+
+  gemini:
+    model_id: "gemini-2.5-flash"
+    temperature: 0.2
+
+  llamaapi:
+    model_id: "Llama-4-Maverick-17B-128E-Instruct-FP8"
+    temperature: 0.2
+    max_completion_tokens: 4096
+
+# --- Configuración del agente ---
+agent:
+  max_handler_calls: 30   # Pasos máximos por tarea (equivalente a max_steps)
+
+# --- Compresión de contexto ---
+context:
+  max_tokens: 40000         # Umbral de tokens antes de comprimir
+  compression_ratio: 0.70   # Fracción del historial a comprimir (70% más antiguo)
+  chars_per_token: 4        # Aproximación: 1 token ≈ 4 caracteres
+
+# --- Sandbox E2B ---
+sandbox:
+  timeout_seconds: 3600     # Tiempo de vida del sandbox (1 hora)
+
+# --- Herramientas: límites de lectura/escritura ---
+tools:
+  max_read_chars: 50000     # Máximo de caracteres a leer por archivo
+  max_write_chars: 1000000  # Máximo de caracteres a escribir por archivo (1 MB)
+  search_max_results: 20    # Resultados máximos en búsqueda de contenido
+  glob_max_results: 100     # Resultados máximos en glob
+  skip_dirs:                # Directorios ignorados en búsquedas
+    - node_modules
+    - .next
+    - .git
+    - __pycache__
+  searchable_extensions:    # Extensiones incluidas en búsqueda de contenido
+    - .js
+    - .jsx
+    - .ts
+    - .tsx
+    - .css
+    - .html
+    - .json
+    - .md
+    - .py
+    - .txt
+    - .env
+
+# --- Interfaz Gradio ---
+gradio:
+  height: 700
+  share: false

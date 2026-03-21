@@ -1,10 +1,12 @@
 """
 Herramientas del agente usando el decorador @tool de Strands.
 El sandbox E2B se accede como global de módulo, inicializado en main.py.
+Los límites y constantes se leen desde lib.config.cfg.
 """
 import json
 from e2b_code_interpreter import Sandbox
 from strands import tool
+from lib.config import cfg
 
 # Global: inicializado en main.py antes de crear el agente
 sbx: Sandbox | None = None
@@ -38,8 +40,7 @@ def execute_code(code: str) -> dict:
     Returns:
         Dict with stdout, stderr, results, error, and success flag.
     """
-    result = _run(code)
-    return result
+    return _run(code)
 
 
 @tool
@@ -78,17 +79,18 @@ else:
 
 
 @tool
-def read_file(path: str, limit: int = 50000, offset: int = 0) -> dict:
+def read_file(path: str, limit: int = 0, offset: int = 0) -> dict:
     """Read the content of a file from the sandbox.
 
     Args:
         path: File path to read.
-        limit: Maximum characters to read. Defaults to 50000.
+        limit: Maximum characters to read. 0 means use the configured default.
         offset: Starting byte position. Defaults to 0.
 
     Returns:
         Dict with content, size, and truncated flag.
     """
+    effective_limit = limit if limit > 0 else cfg.tools.max_read_chars
     code = f"""
 import os, json
 path = {repr(path)}
@@ -98,7 +100,7 @@ else:
     size = os.path.getsize(path)
     with open(path, 'r', encoding='utf-8', errors='replace') as f:
         f.seek({offset})
-        content = f.read({limit})
+        content = f.read({effective_limit})
     truncated = ({offset} + len(content)) < size
     print(json.dumps({{"content": content, "size": size, "truncated": truncated}}))
 """
@@ -122,9 +124,9 @@ def write_file(path: str, content: str) -> dict:
     Returns:
         Dict with message and bytes_written.
     """
-    MAX_WRITE = 1_000_000
-    if len(content) > MAX_WRITE:
-        return {"error": f"Contenido demasiado grande: {len(content)} chars (max {MAX_WRITE})"}
+    max_write = cfg.tools.max_write_chars
+    if len(content) > max_write:
+        return {"error": f"Contenido demasiado grande: {len(content)} chars (max {max_write})"}
     try:
         sbx.files.write(path, content)
         return {"message": f"Archivo '{path}' escrito correctamente", "bytes_written": len(content.encode("utf-8"))}
@@ -133,7 +135,7 @@ def write_file(path: str, content: str) -> dict:
 
 
 @tool
-def search_file_content(pattern: str, path: str = ".", max_results: int = 20) -> dict:
+def search_file_content(pattern: str, path: str = ".", max_results: int = 0) -> dict:
     """Search for a text pattern across all project files in the sandbox.
 
     Skips node_modules, .next, .git, and __pycache__ directories.
@@ -141,20 +143,24 @@ def search_file_content(pattern: str, path: str = ".", max_results: int = 20) ->
     Args:
         pattern: Text pattern to search for (case-insensitive).
         path: Root directory to search from. Defaults to current directory.
-        max_results: Maximum number of matches to return. Defaults to 20.
+        max_results: Maximum matches to return. 0 means use the configured default.
 
     Returns:
         Dict with matches (list of {file, line, content}), total count, and truncated flag.
     """
+    effective_max = max_results if max_results > 0 else cfg.tools.search_max_results
+    skip = set(cfg.tools.skip_dirs)
+    exts = set(cfg.tools.searchable_extensions)
+
     code = f"""
 import os, json
 pattern = {repr(pattern)}
 root = {repr(path)}
-max_results = {max_results}
+max_results = {effective_max}
 matches = []
 total = 0
-SKIP = {{'node_modules', '.next', '.git', '__pycache__'}}
-EXTS = {{'.js','.jsx','.ts','.tsx','.css','.html','.json','.md','.py','.txt','.env'}}
+SKIP = {repr(skip)}
+EXTS = {repr(exts)}
 
 for dirpath, dirs, filenames in os.walk(root):
     dirs[:] = [d for d in dirs if d not in SKIP]
@@ -195,7 +201,6 @@ def replace_in_file(path: str, old: str, new: str) -> dict:
     Returns:
         Dict with replacements count and message.
     """
-    # Leer el archivo directamente (sin pasar por el decorador @tool)
     read_result = _run(f"""
 import os, json
 path = {repr(path)}
@@ -219,12 +224,10 @@ else:
     count = content.count(old)
     if count == 0:
         return {"error": f"Patrón no encontrado en {path}: '{old[:80]}'"}
-
     try:
         sbx.files.write(path, content.replace(old, new))
     except Exception as e:
         return {"error": f"Error escribiendo {path}: {str(e)}"}
-
     return {"replacements": count, "message": f"{count} reemplazo(s) en {path}"}
 
 
@@ -238,11 +241,14 @@ def glob_files(pattern: str) -> dict:
     Returns:
         Dict with files list and total count.
     """
+    max_results = cfg.tools.glob_max_results
+    skip = cfg.tools.skip_dirs
     code = f"""
 import glob, json
 files = glob.glob({repr(pattern)}, recursive=True)
-files = [f for f in files if 'node_modules' not in f and '.next' not in f]
-print(json.dumps({{"files": files[:100], "total": len(files)}}))
+skip = {repr(skip)}
+files = [f for f in files if not any(s in f for s in skip)]
+print(json.dumps({{"files": files[:{max_results}], "total": len(files)}}))
 """
     result = _run(code)
     if not result["success"]:

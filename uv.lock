@@ -20,6 +20,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "e2b-code-interpreter" },
     { name = "gradio" },
+    { name = "pyyaml" },
     { name = "strands-agents" },
     { name = "strands-agents-tools" },
 ]
@@ -28,7 +29,8 @@ dependencies = [
 requires-dist = [
     { name = "e2b-code-interpreter", specifier = ">=1.0.0" },
     { name = "gradio", specifier = ">=4.0.0" },
-    { name = "strands-agents", specifier = ">=0.1.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "strands-agents", specifier = ">=1.0.0" },
     { name = "strands-agents-tools", specifier = ">=0.1.0" },
 ]
 
