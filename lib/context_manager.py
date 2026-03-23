@@ -79,8 +79,26 @@ def compress_context(messages: list, model) -> list:
 
     ratio = cfg.context.compression_ratio
     split = int(len(messages) * ratio)
-    if split % 2 != 0:
-        split += 1  # Asegurar corte en par user/assistant
+    
+    # 1. Asegurar que no cortamos a la mitad de una interacción de herramientas.
+    # Un "Tool result" (asociado a 'user') DEBE tener su "Tool use" (asociado a 'assistant') previo.
+    # Por seguridad, subimos el split hasta encontrar un mensaje 'user' que NO sea resultado de herramienta.
+    while split < len(messages):
+        msg = messages[split]
+        is_tool_result = any("toolResult" in block for block in msg.get("content", []))
+        if msg["role"] == "user" and not is_tool_result:
+            break
+        split += 1
+
+    # Si nos pasamos del límite, bajamos el split (esto es menos probable pero por si acaso)
+    if split >= len(messages) - 2:
+        split = len(messages) - 2
+        while split > 1:
+            msg = messages[split]
+            is_tool_result = any("toolResult" in block for block in msg.get("content", []))
+            if msg["role"] == "user" and not is_tool_result:
+                break
+            split -= 1
 
     old_msgs = messages[:split]
     recent_msgs = messages[split:]

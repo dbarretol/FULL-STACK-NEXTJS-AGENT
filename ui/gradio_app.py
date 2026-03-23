@@ -24,28 +24,39 @@ def create_ui() -> gr.Blocks:
     sbx = Sandbox.create(timeout=cfg.sandbox.timeout_seconds)
     agent, model = build_agent(sbx)
 
-    def chat(user_message: str, history: list) -> tuple[str, list, str]:
+    def add_user_message(user_message: str, history: list):
         if not user_message.strip():
-            return "", history, ""
-        reply = run_task(agent, model, user_message)
+            return "", history
         history.append({"role": "user", "content": user_message})
+        return "", history
+
+    def bot_response(history: list) -> tuple[list, str]:
+        user_message = history[-1]["content"]
+        reply = run_task(agent, model, user_message)
         history.append({"role": "assistant", "content": reply})
-        # Extrae URL de preview si el agente la devolvió
+        
+        # Extrae URL de preview
         preview_url = ""
         for line in reply.splitlines():
             if line.strip().startswith("https://") and ".e2b" in line:
                 preview_url = line.strip()
                 break
-        return "", history, preview_url
+        return history, preview_url
 
     def reset() -> tuple[list, str, str]:
         agent.messages = []
         return [], "", ""
 
-    with gr.Blocks(title="Agente Full Stack 🤖") as demo:
+    custom_css = """
+    .gradio-container { height: 100vh !important; }
+    #chatbot { flex-grow: 1 !important; overflow-y: auto !important; }
+    #chatbot > .wrapper { max-height: none !important; }
+    """
+
+    with gr.Blocks(title="Agente Full Stack 🤖", css=custom_css, fill_height=True) as demo:
         gr.Markdown("# 🤖 Agente Full Stack — Next.js + AWS Bedrock + E2B")
 
-        chatbot = gr.Chatbot(label="Conversación", height=500)
+        chatbot = gr.Chatbot(label="Conversación", type="messages", elem_id="chatbot", autoscroll=True, scale=1)
 
         with gr.Row():
             txt = gr.Textbox(
@@ -75,8 +86,18 @@ def create_ui() -> gr.Blocks:
             inputs=txt,
         )
 
-        btn.click(chat, inputs=[txt, chatbot], outputs=[txt, chatbot, preview_url])
-        txt.submit(chat, inputs=[txt, chatbot], outputs=[txt, chatbot, preview_url])
+        # Cadena de eventos: primero añade el mensaje del usuario, luego ejecuta el bot
+        submit_event = btn.click(
+            add_user_message, inputs=[txt, chatbot], outputs=[txt, chatbot]
+        ).then(
+            bot_response, inputs=[chatbot], outputs=[chatbot, preview_url]
+        )
+
+        txt.submit(
+            add_user_message, inputs=[txt, chatbot], outputs=[txt, chatbot]
+        ).then(
+            bot_response, inputs=[chatbot], outputs=[chatbot, preview_url]
+        )
 
     return demo
 

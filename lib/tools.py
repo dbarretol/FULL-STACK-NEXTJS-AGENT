@@ -386,13 +386,12 @@ def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/ap
         except Exception:
             return False
 
-    # Si ya está corriendo, verifica que la página también compiló
+    # Si ya está corriendo, matamos para asegurar que tome el último build (.next)
     if _is_ready():
-        if _page_compiled():
-            logger.info("start_dev_server ALREADY RUNNING + COMPILED | url=%s", url)
-            return {"url": url, "ready": True, "success": True,
-                    "message": f"Servidor ya estaba corriendo en {url}"}
-        logger.info("start_dev_server ALREADY RUNNING, waiting for compile | url=%s", url)
+        logger.info("start_dev_server | already running, restarting to ensure latest build | url=%s", url)
+        # Matamos procesos previos de node para liberar el puerto 3000
+        _run("pkill -9 -f node || true")
+        time.sleep(2)
 
     # Detección automática de build: si existe .next, preferimos 'npm run start' (más estable/rápido)
     check_build = _run(f"import os; print(os.path.isdir('{workdir}/.next'))")
@@ -504,5 +503,7 @@ def validate_app() -> dict:
     return {
         "success": True,
         "errors": [],
-        "message": "Validación completada: TypeScript OK, Build OK, Lint OK.",
+        "message": "Validación completada: TypeScript OK, Build OK, Lint OK.\n"
+                   "IMPORTANTE: Como estás en modo PRODUCCION (npm run start), debes llamar a "
+                   "start_dev_server de nuevo para que el usuario pueda ver estos cambios.",
     }

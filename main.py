@@ -75,11 +75,13 @@ def build_agent(sbx: Sandbox) -> tuple[Agent, object]:
     model = build_model()
     logger.info("build_agent | model built OK")
 
+    from strands.agent.conversation_manager import SlidingWindowConversationManager
     agent = Agent(
         model=model,
         system_prompt=SYSTEM_PROMPT_WEB_DEV,
         tools=_TOOLS,
         hooks=[MaxToolCallsHook(max_calls=cfg.agent.max_tool_calls)],
+        conversation_manager=SlidingWindowConversationManager(window_size=1000) # Evita el corte default a 40
     )
     logger.info("build_agent | agent ready tools=%d max_tool_calls=%d",
                 len(_TOOLS), cfg.agent.max_tool_calls)

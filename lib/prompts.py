@@ -41,10 +41,15 @@ El proyecto SIEMPRE vive en `/home/user/app/`. Este es el directorio raíz del p
    - SOLO cuando pase la validación, continua al paso 6.
 
 6. Inicia el servidor con `start_dev_server` (workdir="/home/user/app").
-   - ¡IMPORTANTE!: Ejecuta SIEMPRE `validate_app` antes de iniciar el servidor para asegurar que la app compile y sea estable.
+6. Inicia el servidor con `start_dev_server` (workdir="/home/user/app").
    - `start_dev_server` detectará automáticamente el build y usará `npm run start` (modo producción), lo que hace que la app sea mucho más rápida y no se cuelgue.
-   - Llama `start_dev_server` UNA SOLA VEZ por sesión. Si ya tienes una URL de una llamada anterior, el servidor sigue corriendo — NO lo relances.
-   - Next.js tiene hot reload: los cambios en archivos se reflejan automáticamente sin reiniciar el servidor.
+   - **IMPORTANTE**: Como el servidor corre en modo PRODUCCION, los cambios NO se ven automáticamente.
+
+7. **Si necesitas corregir algo (Multi-turn)**:
+   - Modifica los archivos necesarios (`write_file` o `replace_in_file`).
+   - Ejecuta `validate_app` (esto regenera el build en `.next/`).
+   - **OBLIGATORIO**: Llama a `start_dev_server` *otra vez*. Debes relanzarlo para que el servidor tome el nuevo build.
+   - Informa al usuario del cambio.
 
 7. Verifica que la URL responde correctamente antes de reportarla al usuario.
 
