@@ -378,9 +378,9 @@ def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/ap
                 if resp.status >= 500:
                     return False
                 html = resp.read(4096).decode("utf-8", errors="ignore")
-                # Next.js devuelve "__NEXT_DATA__" o contenido real cuando compiló
-                # Si aún está compilando devuelve una página mínima sin ese marcador
-                return "__NEXT_DATA__" in html or "<main" in html or "<div id=" in html
+                # Next.js App Router no usa __NEXT_DATA__, usa streaming de cuerpo.
+                # Buscamos etiquetas básicas que indiquen que el HTML no es un error de E2B.
+                return any(m in html for m in ["<main", "<div", "<body", "<h1", "Next.js"])
         except urllib.error.HTTPError as e:
             return e.code < 500
         except Exception:
@@ -393,6 +393,18 @@ def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/ap
             return {"url": url, "ready": True, "success": True,
                     "message": f"Servidor ya estaba corriendo en {url}"}
         logger.info("start_dev_server ALREADY RUNNING, waiting for compile | url=%s", url)
+
+    # Detección automática de build: si existe .next, preferimos 'npm run start' (más estable/rápido)
+    check_build = _run(f"import os; print(os.path.isdir('{workdir}/.next'))")
+    has_build = "True" in "".join(check_build["stdout"])
+    
+    if command == "npm run dev" and has_build:
+        command = "npm run start"
+        logger.info("start_dev_server | build detected, switching to production mode: %s", command)
+
+    # Forzar binding a 0.0.0.0 para Next.js si es el comando por defecto
+    if command in ["npm run dev", "npm run start"]:
+        command = f"{command} -- -H 0.0.0.0"
 
     try:
         if not _is_ready():
@@ -414,25 +426,26 @@ def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/ap
             return {"url": url, "ready": False, "success": False,
                     "error": "El servidor no levantó en 120 segundos."}
 
-        # Fase 2: espera a que la página principal compile (Next.js compila on-demand)
-        logger.info("start_dev_server waiting for page compile | url=%s", url)
+        # Fase 2: espera a que la página principal compile (Next.js compila on-demand en dev)
+        # En producción (npm run start) es instantáneo, pero igual verificamos.
+        logger.info("start_dev_server waiting for page compile/hydration | url=%s", url)
         compile_deadline = time.monotonic() + 60
         compile_attempt = 0
         while time.monotonic() < compile_deadline:
             compile_attempt += 1
             if _page_compiled():
                 elapsed = 120 - (deadline - time.monotonic())
-                logger.info("start_dev_server PAGE READY | url=%s compile_attempts=%d elapsed=%.1fs",
-                            url, compile_attempt, elapsed)
+                logger.info("start_dev_server PAGE READY | url=%s compile_attempts=%d",
+                            url, compile_attempt)
                 return {"url": url, "ready": True, "success": True,
                         "message": f"Servidor listo en {url}"}
             logger.debug("start_dev_server waiting compile | attempt=%d", compile_attempt)
             time.sleep(3)
 
-        # Si no detectamos __NEXT_DATA__ pero el servidor responde, igual devolvemos la URL
-        logger.warning("start_dev_server compile check inconclusive, returning URL anyway | url=%s", url)
+        # Si no detectamos markers pero el servidor responde, devolvemos success
+        logger.warning("start_dev_server compile check inconclusive, but server is up | url=%s", url)
         return {"url": url, "ready": True, "success": True,
-                "message": f"Servidor listo en {url} (compilación en progreso, espera unos segundos antes de abrir)"}
+                "message": f"Servidor listo en {url} (verificación de hidratación pendiente)"}
 
     except Exception as e:
         logger.error("start_dev_server EXCEPTION | error=%s", e)
