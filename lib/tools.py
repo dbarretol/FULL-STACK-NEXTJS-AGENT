@@ -257,3 +257,80 @@ print(json.dumps({{"files": files[:{max_results}], "total": len(files)}}))
         return json.loads("".join(result["stdout"]))
     except json.JSONDecodeError:
         return {"error": "Output inesperado del sandbox"}
+
+
+@tool
+def run_command(command: str, workdir: str = "/home/user", timeout: int = 60) -> dict:
+    """Run a shell command in the sandbox and wait for it to finish.
+
+    Use this for: npm install, npx create-next-app, npm run build, npx tsc, git init, etc.
+    Do NOT use for long-running servers (use start_dev_server instead).
+
+    Args:
+        command: Shell command to execute, e.g. 'npm install' or 'npx tsc --noEmit'.
+        workdir: Working directory for the command. Defaults to /home/user.
+        timeout: Max seconds to wait. Defaults to 60.
+
+    Returns:
+        Dict with stdout, stderr, exit_code, and success flag.
+    """
+    try:
+        result = sbx.commands.run(command, cwd=workdir, timeout=timeout)
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.exit_code,
+            "success": result.exit_code == 0,
+        }
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
+
+@tool
+def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/app", port: int = 3000) -> dict:
+    """Start a long-running dev server in the background, wait until it is ready, and return its public URL.
+
+    Launches the server, then polls the URL until it responds with HTTP 200 (or any non-connection-error
+    response), confirming the app is live before returning. Times out after 120 seconds.
+
+    Use this after the Next.js app is ready to preview it in the browser.
+
+    Args:
+        command: Command to start the server. Defaults to 'npm run dev'.
+        workdir: Directory where the command runs. Defaults to /home/user/app.
+        port: Port the server listens on. Defaults to 3000.
+
+    Returns:
+        Dict with url (public preview URL), ready (bool), and success flag.
+    """
+    import time
+    import urllib.request
+    import urllib.error
+
+    try:
+        sbx.commands.run(command, cwd=workdir, background=True)
+        host = sbx.get_host(port)
+        url = f"https://{host}"
+
+        # Polling: espera hasta que el servidor responda
+        deadline = time.time() + 120
+        interval = 3
+        while time.time() < deadline:
+            try:
+                with urllib.request.urlopen(url, timeout=5) as resp:
+                    if resp.status < 500:
+                        return {"url": url, "ready": True, "success": True,
+                                "message": f"Servidor listo en {url}"}
+            except urllib.error.HTTPError as e:
+                # 4xx significa que el servidor está vivo aunque devuelva error
+                if e.code < 500:
+                    return {"url": url, "ready": True, "success": True,
+                            "message": f"Servidor listo en {url}"}
+            except Exception:
+                pass  # Conexión rechazada — servidor aún arrancando
+            time.sleep(interval)
+
+        return {"url": url, "ready": False, "success": False,
+                "error": "El servidor no respondió en 120 segundos. Verifica que la app compile sin errores."}
+    except Exception as e:
+        return {"error": str(e), "success": False}

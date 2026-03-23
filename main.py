@@ -22,13 +22,16 @@ from lib.tools import (
     search_file_content,
     replace_in_file,
     glob_files,
+    run_command,
+    start_dev_server,
 )
 from lib.context_manager import maybe_compress
 from lib.hooks import MaxToolCallsHook
 from lib.prompts import SYSTEM_PROMPT_WEB_DEV
 
 _TOOLS = [execute_code, list_directory, read_file, write_file,
-          search_file_content, replace_in_file, glob_files]
+          search_file_content, replace_in_file, glob_files,
+          run_command, start_dev_server]
 
 
 def build_agent(sbx: Sandbox) -> tuple[Agent, object]:

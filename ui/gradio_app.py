@@ -24,16 +24,23 @@ def create_ui() -> gr.Blocks:
     sbx = Sandbox.create(timeout=cfg.sandbox.timeout_seconds)
     agent, model = build_agent(sbx)
 
-    def chat(user_message: str, history: list) -> tuple[str, list]:
+    def chat(user_message: str, history: list) -> tuple[str, list, str]:
         if not user_message.strip():
-            return "", history
+            return "", history, ""
         reply = run_task(agent, model, user_message)
-        history.append((user_message, reply))
-        return "", history
+        history.append({"role": "user", "content": user_message})
+        history.append({"role": "assistant", "content": reply})
+        # Extrae URL de preview si el agente la devolvió
+        preview_url = ""
+        for line in reply.splitlines():
+            if line.strip().startswith("https://") and ".e2b" in line:
+                preview_url = line.strip()
+                break
+        return "", history, preview_url
 
-    def reset() -> tuple[list, str]:
+    def reset() -> tuple[list, str, str]:
         agent.messages = []
-        return [], ""
+        return [], "", ""
 
     with gr.Blocks(title="Agente Full Stack 🤖") as demo:
         gr.Markdown("# 🤖 Agente Full Stack — Next.js + AWS Bedrock + E2B")
@@ -48,8 +55,15 @@ def create_ui() -> gr.Blocks:
             )
             btn = gr.Button("Enviar ➤", variant="primary", scale=1)
 
+        preview_url = gr.Textbox(
+            label="🌐 Preview URL (abre en el navegador)",
+            interactive=False,
+            visible=True,
+            placeholder="La URL aparecerá aquí cuando el agente inicie el servidor...",
+        )
+
         reset_btn = gr.Button("🗑️ Nueva conversación", variant="secondary")
-        reset_btn.click(reset, outputs=[chatbot, txt])
+        reset_btn.click(reset, outputs=[chatbot, txt, preview_url])
 
         gr.Examples(
             examples=[
@@ -61,8 +75,8 @@ def create_ui() -> gr.Blocks:
             inputs=txt,
         )
 
-        btn.click(chat, inputs=[txt, chatbot], outputs=[txt, chatbot])
-        txt.submit(chat, inputs=[txt, chatbot], outputs=[txt, chatbot])
+        btn.click(chat, inputs=[txt, chatbot], outputs=[txt, chatbot, preview_url])
+        txt.submit(chat, inputs=[txt, chatbot], outputs=[txt, chatbot, preview_url])
 
     return demo
 
