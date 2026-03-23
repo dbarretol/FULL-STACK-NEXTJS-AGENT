@@ -6,7 +6,7 @@
 
 # --- Proveedor LLM activo ---
 # Valores posibles: "bedrock" | "anthropic" | "openai" | "gemini" | "llamaapi"
-llm_provider: "bedrock"
+llm_provider: "gemini"
 
 # --- Configuración de modelos por proveedor ---
 models:
@@ -28,7 +28,7 @@ models:
     temperature: 0.2
 
   gemini:
-    model_id: "gemini-2.5-flash"
+    model_id: "gemini-3.1-flash-lite-preview"
     temperature: 0.2
 
   llamaapi:
