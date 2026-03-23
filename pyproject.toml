@@ -5,17 +5,21 @@ description = "Agente autónomo que genera aplicaciones Next.js completas usando
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "strands-agents>=1.0.0",
-    "strands-agents-tools>=0.1.0",
-    "e2b-code-interpreter>=1.0.0",
-    "gradio>=4.0.0",
-    "pyyaml>=6.0",
+    "e2b-code-interpreter>=2.5.0",
+    # Bedrock (boto3) ya viene incluido en strands-agents base — no necesita extra
+    "gradio>=6.9.0",
+    "pyyaml>=6.0.3",
+    "strands-agents>=1.32.0",
+    "strands-agents-tools>=0.2.23",
 ]
 
+# Instala solo el proveedor que necesitas (Bedrock no requiere extra):
+#   uv sync --extra gemini    → Google Gemini  (google-genai)
+#   uv sync --extra openai    → OpenAI         (openai)
+#   uv sync --extra anthropic → Anthropic      (anthropic)
+#   uv sync --extra llamaapi  → LlamaAPI       (llama-api-client)
+#   uv sync --extra mistral   → Mistral        (mistralai)
 [project.optional-dependencies]
-gemini = ["strands-agents[gemini]"]
-aws = ["strands-agents[bedrock]"]
-bedrock = ["strands-agents[bedrock]"]
-openai = ["strands-agents[openai]"]
-anthropic = ["strands-agents[anthropic]"]
-llamaapi = ["strands-agents[llamaapi]"]
+gemini-client = [
+    "strands-agents[gemini]>=1.32.0",
+]
