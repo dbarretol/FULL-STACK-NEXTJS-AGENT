@@ -47,18 +47,11 @@ def create_ui() -> gr.Blocks:
         system.reset()
         return [], "", ""
 
-    custom_css = """
-    .gradio-container { height: 100vh !important; }
-    #chatbot { flex-grow: 1 !important; overflow-y: auto !important; }
-    #chatbot > .wrapper { max-height: none !important; }
-    """
-
-    with gr.Blocks(title="Agente Full Stack 🤖", css=custom_css, fill_height=True) as demo:
+    with gr.Blocks(title="Agente Full Stack 🤖", fill_height=True) as demo:
         gr.Markdown("# 🤖 Agente Full Stack Multi-Agente — Next.js + E2B")
 
         chatbot = gr.Chatbot(
             label="Conversación",
-            type="messages",
             elem_id="chatbot",
             autoscroll=True,
             scale=1,
@@ -108,4 +101,12 @@ def create_ui() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    create_ui().launch(share=cfg.gradio.share, height=cfg.gradio.height, theme=gr.themes.Soft())
+    create_ui().launch(
+        share=cfg.gradio.share,
+        height=cfg.gradio.height,
+        theme=gr.themes.Soft(),
+        css="""
+        .gradio-container { height: 100vh !important; }
+        #chatbot { flex-grow: 1 !important; overflow-y: auto !important; }
+        """,
+    )
