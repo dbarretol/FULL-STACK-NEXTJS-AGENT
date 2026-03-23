@@ -11,3 +11,11 @@ dependencies = [
     "gradio>=4.0.0",
     "pyyaml>=6.0",
 ]
+
+[project.optional-dependencies]
+gemini = ["strands-agents[gemini]"]
+aws = ["strands-agents[bedrock]"]
+bedrock = ["strands-agents[bedrock]"]
+openai = ["strands-agents[openai]"]
+anthropic = ["strands-agents[anthropic]"]
+llamaapi = ["strands-agents[llamaapi]"]
