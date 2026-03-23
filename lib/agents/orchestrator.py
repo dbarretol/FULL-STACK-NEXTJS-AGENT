@@ -11,6 +11,7 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from lib.config import cfg
 from lib.hooks import MaxToolCallsHook
 from lib.llm import build_model
+from lib.context_manager import maybe_compress
 from lib.agents.prompts import ORCHESTRATOR_PROMPT
 from lib.agents.specialized import (
     build_frontend_agent,
@@ -83,6 +84,7 @@ class MultiAgentSystem:
         _uiux = self._uiux
         _qa = self._qa
         _context = self._context
+        _model = self._model
 
         @tool(
             name="frontend_agent",
@@ -102,6 +104,7 @@ class MultiAgentSystem:
                 Agent response describing what was implemented.
             """
             logger.info("frontend_agent DELEGATING | task=%.100s", task)
+            maybe_compress(_frontend, _model)
             result = str(_frontend(task))
             logger.info("frontend_agent DONE | response_len=%d", len(result))
             return result
@@ -124,6 +127,7 @@ class MultiAgentSystem:
                 Agent response describing what was implemented.
             """
             logger.info("backend_agent DELEGATING | task=%.100s", task)
+            maybe_compress(_backend, _model)
             result = str(_backend(task))
             logger.info("backend_agent DONE | response_len=%d", len(result))
             return result
@@ -146,6 +150,7 @@ class MultiAgentSystem:
                 Agent response describing what was changed.
             """
             logger.info("uiux_agent DELEGATING | task=%.100s", task)
+            maybe_compress(_uiux, _model)
             result = str(_uiux(task))
             logger.info("uiux_agent DONE | response_len=%d", len(result))
             return result
@@ -169,6 +174,7 @@ class MultiAgentSystem:
                 Agent response with validation results and preview URL if successful.
             """
             logger.info("qa_agent DELEGATING | task=%.100s", task)
+            maybe_compress(_qa, _model)
             result = str(_qa(task))
             logger.info("qa_agent DONE | response_len=%d", len(result))
             return result
@@ -199,6 +205,8 @@ class MultiAgentSystem:
     def run(self, query: str) -> str:
         """Ejecuta una tarea a través del orquestador.
 
+        Comprime el contexto del orquestador si supera el umbral antes de cada llamada.
+
         Args:
             query: Instrucción en lenguaje natural del usuario.
 
@@ -206,6 +214,7 @@ class MultiAgentSystem:
             Respuesta final del orquestador como string.
         """
         logger.info("MultiAgentSystem.run START | query=%.100s", query)
+        maybe_compress(self._orchestrator, self._model)
         result = str(self._orchestrator(query))
         logger.info("MultiAgentSystem.run END | response_len=%d", len(result))
         return result
