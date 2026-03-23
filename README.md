@@ -71,3 +71,6 @@ Para confirmar que el agente cumple con los objetivos:
 - `lib/prompts.py`: System prompt con el razonamiento del desarrollador senior.
 - `ui/gradio_app.py`: Interfaz de usuario para pruebas interactivas.
 - `main.py`: Orquestador principal y punto de entrada CLI.
+
+
+usar uv run python -m ui.gradio_app   poara ejecutare, actualmente el agente solo funciona con gemini aunque se ha impementado los clients apra otros LLM. cuandos e use geminia segurarse de incluir un api key con facturacion en ai studio, las api key gratuitas pueden rapidamente chocasr los limites permitidos y ya nos e van a permitir mas llaamdos a la api por un rato.
