@@ -1,5 +1,5 @@
 """
-Interfaz Gradio para el agente Full Stack.
+Interfaz Gradio para el sistema multi-agente Full Stack.
 Ejecutar con: python -m ui.gradio_app
 La configuración de la UI se lee desde lib/config/settings.yaml (gradio section).
 """
@@ -7,22 +7,20 @@ import sys
 import os
 from dotenv import load_dotenv
 
-# Cargar variables de entorno antes de cualquier otra cosa
 load_dotenv()
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import gradio as gr
 from e2b_code_interpreter import Sandbox
 
 from lib.config import cfg
-from main import build_agent, run_task
+from lib.agents.orchestrator import MultiAgentSystem, build_multi_agent_system
 
 
 def create_ui() -> gr.Blocks:
     """Crea la interfaz Gradio con historial de conversación persistente."""
     sbx = Sandbox.create(timeout=cfg.sandbox.timeout_seconds)
-    agent, model = build_agent(sbx)
+    system = build_multi_agent_system(sbx)
 
     def add_user_message(user_message: str, history: list):
         if not user_message.strip():
@@ -32,19 +30,21 @@ def create_ui() -> gr.Blocks:
 
     def bot_response(history: list) -> tuple[list, str]:
         user_message = history[-1]["content"]
-        reply = run_task(agent, model, user_message)
+        reply = system.run(user_message)
         history.append({"role": "assistant", "content": reply})
-        
-        # Extrae URL de preview
+
+        # Extrae URL de preview de la respuesta
         preview_url = ""
         for line in reply.splitlines():
-            if line.strip().startswith("https://") and ".e2b" in line:
-                preview_url = line.strip()
+            stripped = line.strip()
+            if stripped.startswith("https://") and ".e2b" in stripped:
+                preview_url = stripped
                 break
+
         return history, preview_url
 
     def reset() -> tuple[list, str, str]:
-        agent.messages = []
+        system.reset()
         return [], "", ""
 
     custom_css = """
@@ -54,9 +54,15 @@ def create_ui() -> gr.Blocks:
     """
 
     with gr.Blocks(title="Agente Full Stack 🤖", css=custom_css, fill_height=True) as demo:
-        gr.Markdown("# 🤖 Agente Full Stack — Next.js + AWS Bedrock + E2B")
+        gr.Markdown("# 🤖 Agente Full Stack Multi-Agente — Next.js + E2B")
 
-        chatbot = gr.Chatbot(label="Conversación", type="messages", elem_id="chatbot", autoscroll=True, scale=1)
+        chatbot = gr.Chatbot(
+            label="Conversación",
+            type="messages",
+            elem_id="chatbot",
+            autoscroll=True,
+            scale=1,
+        )
 
         with gr.Row():
             txt = gr.Textbox(
@@ -86,8 +92,7 @@ def create_ui() -> gr.Blocks:
             inputs=txt,
         )
 
-        # Cadena de eventos: primero añade el mensaje del usuario, luego ejecuta el bot
-        submit_event = btn.click(
+        btn.click(
             add_user_message, inputs=[txt, chatbot], outputs=[txt, chatbot]
         ).then(
             bot_response, inputs=[chatbot], outputs=[chatbot, preview_url]
