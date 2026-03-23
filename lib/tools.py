@@ -4,9 +4,15 @@ El sandbox E2B se accede como global de módulo, inicializado en main.py.
 Los límites y constantes se leen desde lib.config.cfg.
 """
 import json
+import logging
+import time
+import urllib.request
+import urllib.error
 from e2b_code_interpreter import Sandbox
 from strands import tool
 from lib.config import cfg
+
+logger = logging.getLogger("agent.tools")
 
 # Global: inicializado en main.py antes de crear el agente
 sbx: Sandbox | None = None
@@ -18,7 +24,7 @@ class ToolError(Exception):
 
 
 def _run(code: str) -> dict:
-    """Ejecuta código en el sandbox y retorna stdout/stderr/error."""
+    """Ejecuta código Python en el sandbox y retorna stdout/stderr/error."""
     execution = sbx.run_code(code)
     stdout = list(execution.logs.stdout) if execution.logs.stdout else []
     stderr = list(execution.logs.stderr) if execution.logs.stderr else []
@@ -40,7 +46,13 @@ def execute_code(code: str) -> dict:
     Returns:
         Dict with stdout, stderr, results, error, and success flag.
     """
-    return _run(code)
+    logger.debug("execute_code | code=%s", code[:120].replace("\n", "↵"))
+    result = _run(code)
+    if not result["success"]:
+        logger.warning("execute_code FAILED | error=%s", result["error"])
+    else:
+        logger.debug("execute_code OK | stdout_lines=%d", len(result["stdout"]))
+    return result
 
 
 @tool
@@ -53,6 +65,7 @@ def list_directory(path: str = ".") -> dict:
     Returns:
         Dict with entries (list of {name, type, size}) and count.
     """
+    logger.debug("list_directory | path=%s", path)
     code = f"""
 import os, json
 path = {repr(path)}
@@ -71,10 +84,14 @@ else:
 """
     result = _run(code)
     if not result["success"]:
+        logger.warning("list_directory FAILED | path=%s error=%s", path, result["error"])
         return {"error": f"Error listando {path}: {result['error']}"}
     try:
-        return json.loads("".join(result["stdout"]))
+        parsed = json.loads("".join(result["stdout"]))
+        logger.debug("list_directory OK | path=%s count=%s", path, parsed.get("count"))
+        return parsed
     except json.JSONDecodeError:
+        logger.error("list_directory JSON parse error | stdout=%s", result["stdout"])
         return {"error": f"Output inesperado: {''.join(result['stdout'])}"}
 
 
@@ -90,6 +107,7 @@ def read_file(path: str, limit: int = 0, offset: int = 0) -> dict:
     Returns:
         Dict with content, size, and truncated flag.
     """
+    logger.debug("read_file | path=%s offset=%d", path, offset)
     effective_limit = limit if limit > 0 else cfg.tools.max_read_chars
     code = f"""
 import os, json
@@ -106,10 +124,17 @@ else:
 """
     result = _run(code)
     if not result["success"]:
+        logger.warning("read_file FAILED | path=%s error=%s", path, result["error"])
         return {"error": f"Error leyendo {path}: {result['error']}"}
     try:
-        return json.loads("".join(result["stdout"]))
+        parsed = json.loads("".join(result["stdout"]))
+        if "error" in parsed:
+            logger.warning("read_file NOT FOUND | path=%s", path)
+        else:
+            logger.debug("read_file OK | path=%s size=%d truncated=%s", path, parsed.get("size", 0), parsed.get("truncated"))
+        return parsed
     except json.JSONDecodeError:
+        logger.error("read_file JSON parse error | path=%s", path)
         return {"error": f"Output inesperado: {''.join(result['stdout'])}"}
 
 
@@ -124,13 +149,17 @@ def write_file(path: str, content: str) -> dict:
     Returns:
         Dict with message and bytes_written.
     """
+    logger.info("write_file | path=%s bytes=%d", path, len(content.encode("utf-8")))
     max_write = cfg.tools.max_write_chars
     if len(content) > max_write:
+        logger.warning("write_file REJECTED | path=%s size=%d max=%d", path, len(content), max_write)
         return {"error": f"Contenido demasiado grande: {len(content)} chars (max {max_write})"}
     try:
         sbx.files.write(path, content)
+        logger.info("write_file OK | path=%s", path)
         return {"message": f"Archivo '{path}' escrito correctamente", "bytes_written": len(content.encode("utf-8"))}
     except Exception as e:
+        logger.error("write_file EXCEPTION | path=%s error=%s", path, e)
         return {"error": f"Error escribiendo {path}: {str(e)}"}
 
 
@@ -148,6 +177,7 @@ def search_file_content(pattern: str, path: str = ".", max_results: int = 0) -> 
     Returns:
         Dict with matches (list of {file, line, content}), total count, and truncated flag.
     """
+    logger.debug("search_file_content | pattern=%s path=%s", pattern, path)
     effective_max = max_results if max_results > 0 else cfg.tools.search_max_results
     skip = set(cfg.tools.skip_dirs)
     exts = set(cfg.tools.searchable_extensions)
@@ -182,10 +212,14 @@ print(json.dumps({{"matches": matches, "total": total, "truncated": total > max_
 """
     result = _run(code)
     if not result["success"]:
+        logger.warning("search_file_content FAILED | pattern=%s error=%s", pattern, result["error"])
         return {"error": f"Error buscando '{pattern}': {result['error']}"}
     try:
-        return json.loads("".join(result["stdout"]))
+        parsed = json.loads("".join(result["stdout"]))
+        logger.debug("search_file_content OK | pattern=%s total=%d", pattern, parsed.get("total", 0))
+        return parsed
     except json.JSONDecodeError:
+        logger.error("search_file_content JSON parse error")
         return {"error": "Output inesperado del sandbox"}
 
 
@@ -201,6 +235,7 @@ def replace_in_file(path: str, old: str, new: str) -> dict:
     Returns:
         Dict with replacements count and message.
     """
+    logger.info("replace_in_file | path=%s old_snippet=%s", path, old[:60].replace("\n", "↵"))
     read_result = _run(f"""
 import os, json
 path = {repr(path)}
@@ -212,10 +247,12 @@ else:
     print(json.dumps({{"content": content}}))
 """)
     if not read_result["success"]:
+        logger.warning("replace_in_file read FAILED | path=%s", path)
         return {"error": f"Error leyendo {path}: {read_result['error']}"}
     try:
         file_data = json.loads("".join(read_result["stdout"]))
     except json.JSONDecodeError:
+        logger.error("replace_in_file JSON parse error | path=%s", path)
         return {"error": "Output inesperado al leer archivo"}
     if "error" in file_data:
         return file_data
@@ -223,10 +260,13 @@ else:
     content = file_data["content"]
     count = content.count(old)
     if count == 0:
+        logger.warning("replace_in_file PATTERN NOT FOUND | path=%s snippet=%s", path, old[:60])
         return {"error": f"Patrón no encontrado en {path}: '{old[:80]}'"}
     try:
         sbx.files.write(path, content.replace(old, new))
+        logger.info("replace_in_file OK | path=%s replacements=%d", path, count)
     except Exception as e:
+        logger.error("replace_in_file write EXCEPTION | path=%s error=%s", path, e)
         return {"error": f"Error escribiendo {path}: {str(e)}"}
     return {"replacements": count, "message": f"{count} reemplazo(s) en {path}"}
 
@@ -241,6 +281,7 @@ def glob_files(pattern: str) -> dict:
     Returns:
         Dict with files list and total count.
     """
+    logger.debug("glob_files | pattern=%s", pattern)
     max_results = cfg.tools.glob_max_results
     skip = cfg.tools.skip_dirs
     code = f"""
@@ -252,10 +293,14 @@ print(json.dumps({{"files": files[:{max_results}], "total": len(files)}}))
 """
     result = _run(code)
     if not result["success"]:
+        logger.warning("glob_files FAILED | pattern=%s error=%s", pattern, result["error"])
         return {"error": f"Error en glob '{pattern}': {result['error']}"}
     try:
-        return json.loads("".join(result["stdout"]))
+        parsed = json.loads("".join(result["stdout"]))
+        logger.debug("glob_files OK | pattern=%s total=%d", pattern, parsed.get("total", 0))
+        return parsed
     except json.JSONDecodeError:
+        logger.error("glob_files JSON parse error | pattern=%s", pattern)
         return {"error": "Output inesperado del sandbox"}
 
 
@@ -274,8 +319,19 @@ def run_command(command: str, workdir: str = "/home/user", timeout: int = 60) ->
     Returns:
         Dict with stdout, stderr, exit_code, and success flag.
     """
+    logger.info("run_command | cmd=%s workdir=%s timeout=%d", command, workdir, timeout)
+    t0 = time.monotonic()
     try:
         result = sbx.commands.run(command, cwd=workdir, timeout=timeout)
+        elapsed = time.monotonic() - t0
+        if result.exit_code != 0:
+            logger.warning(
+                "run_command FAILED | cmd=%s exit=%d elapsed=%.1fs\nSTDERR: %s",
+                command, result.exit_code, elapsed,
+                (result.stderr or "")[-800:],
+            )
+        else:
+            logger.info("run_command OK | cmd=%s exit=0 elapsed=%.1fs", command, elapsed)
         return {
             "stdout": result.stdout,
             "stderr": result.stderr,
@@ -283,6 +339,7 @@ def run_command(command: str, workdir: str = "/home/user", timeout: int = 60) ->
             "success": result.exit_code == 0,
         }
     except Exception as e:
+        logger.error("run_command EXCEPTION | cmd=%s error=%s", command, e)
         return {"error": str(e), "success": False}
 
 
@@ -301,12 +358,9 @@ def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/ap
     Returns:
         Dict with url (public preview URL), ready (bool), and success flag.
     """
-    import time
-    import urllib.request
-    import urllib.error
-
     host = sbx.get_host(port)
     url = f"https://{host}"
+    logger.info("start_dev_server | cmd=%s workdir=%s port=%d url=%s", command, workdir, port, url)
 
     def _is_ready() -> bool:
         try:
@@ -317,22 +371,125 @@ def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/ap
         except Exception:
             return False
 
-    # Si ya está corriendo, devuelve la URL sin relanzar
+    def _page_compiled() -> bool:
+        """Verifica que la página principal ya compiló leyendo el HTML de respuesta."""
+        try:
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                if resp.status >= 500:
+                    return False
+                html = resp.read(4096).decode("utf-8", errors="ignore")
+                # Next.js devuelve "__NEXT_DATA__" o contenido real cuando compiló
+                # Si aún está compilando devuelve una página mínima sin ese marcador
+                return "__NEXT_DATA__" in html or "<main" in html or "<div id=" in html
+        except urllib.error.HTTPError as e:
+            return e.code < 500
+        except Exception:
+            return False
+
+    # Si ya está corriendo, verifica que la página también compiló
     if _is_ready():
-        return {"url": url, "ready": True, "success": True,
-                "message": f"Servidor ya estaba corriendo en {url}"}
+        if _page_compiled():
+            logger.info("start_dev_server ALREADY RUNNING + COMPILED | url=%s", url)
+            return {"url": url, "ready": True, "success": True,
+                    "message": f"Servidor ya estaba corriendo en {url}"}
+        logger.info("start_dev_server ALREADY RUNNING, waiting for compile | url=%s", url)
 
     try:
-        sbx.commands.run(command, cwd=workdir, background=True)
+        if not _is_ready():
+            logger.info("start_dev_server LAUNCHING | cmd=%s", command)
+            sbx.commands.run(command, cwd=workdir, background=True)
 
-        deadline = time.time() + 120
-        while time.time() < deadline:
+        # Fase 1: espera a que el servidor levante
+        deadline = time.monotonic() + 120
+        attempt = 0
+        while time.monotonic() < deadline:
+            attempt += 1
             if _is_ready():
+                logger.info("start_dev_server SERVER UP | url=%s attempts=%d", url, attempt)
+                break
+            logger.debug("start_dev_server polling server | attempt=%d", attempt)
+            time.sleep(3)
+        else:
+            logger.error("start_dev_server TIMEOUT waiting for server | url=%s", url)
+            return {"url": url, "ready": False, "success": False,
+                    "error": "El servidor no levantó en 120 segundos."}
+
+        # Fase 2: espera a que la página principal compile (Next.js compila on-demand)
+        logger.info("start_dev_server waiting for page compile | url=%s", url)
+        compile_deadline = time.monotonic() + 60
+        compile_attempt = 0
+        while time.monotonic() < compile_deadline:
+            compile_attempt += 1
+            if _page_compiled():
+                elapsed = 120 - (deadline - time.monotonic())
+                logger.info("start_dev_server PAGE READY | url=%s compile_attempts=%d elapsed=%.1fs",
+                            url, compile_attempt, elapsed)
                 return {"url": url, "ready": True, "success": True,
                         "message": f"Servidor listo en {url}"}
+            logger.debug("start_dev_server waiting compile | attempt=%d", compile_attempt)
             time.sleep(3)
 
-        return {"url": url, "ready": False, "success": False,
-                "error": "El servidor no respondió en 120 segundos. Verifica que la app compile sin errores."}
+        # Si no detectamos __NEXT_DATA__ pero el servidor responde, igual devolvemos la URL
+        logger.warning("start_dev_server compile check inconclusive, returning URL anyway | url=%s", url)
+        return {"url": url, "ready": True, "success": True,
+                "message": f"Servidor listo en {url} (compilación en progreso, espera unos segundos antes de abrir)"}
+
     except Exception as e:
+        logger.error("start_dev_server EXCEPTION | error=%s", e)
         return {"error": str(e), "success": False}
+
+
+@tool
+def validate_app() -> dict:
+    """Valida la app Next.js ejecutando checks de calidad: TypeScript, build y linter.
+
+    Ejecuta secuencialmente:
+    1. npx tsc --noEmit (verifica tipos)
+    2. npm run build (verifica que compila)
+    3. npm run lint (verifica estilo)
+
+    Si alguno falla, devuelve los errores completos para que el agente los corrija.
+
+    Returns:
+        Dict con success (bool), errors (list), y message descriptivo.
+    """
+    logger.info("validate_app | starting validation checks")
+
+    # Check 1: TypeScript
+    result = sbx.commands.run("npx tsc --noEmit", cwd="/home/user/app", timeout=60)
+    if result.exit_code != 0:
+        logger.warning("validate_app FAILED | tsc errors\n%s", result.stderr or result.stdout)
+        return {
+            "success": False,
+            "errors": ["TypeScript errors", result.stderr or result.stdout],
+            "message": f"Errores de TypeScript detectados:\n{result.stderr or result.stdout}",
+        }
+    logger.info("validate_app OK | tsc passed")
+
+    # Check 2: Build
+    result = sbx.commands.run("npm run build", cwd="/home/user/app", timeout=120)
+    if result.exit_code != 0:
+        logger.warning("validate_app FAILED | build errors\n%s", result.stderr or result.stdout)
+        return {
+            "success": False,
+            "errors": ["Build failed", result.stderr or result.stdout],
+            "message": f"Error en el build:\n{result.stderr or result.stdout}",
+        }
+    logger.info("validate_app OK | build passed")
+
+    # Check 3: Lint (opcional, pero recomendado)
+    result = sbx.commands.run("npm run lint", cwd="/home/user/app", timeout=60)
+    if result.exit_code != 0:
+        logger.warning("validate_app WARNING | lint issues\n%s", result.stderr or result.stdout)
+        return {
+            "success": True,
+            "errors": ["Lint warnings", result.stderr or result.stdout],
+            "message": f"Advertencias de lint detectadas (la app funciona):\n{result.stderr or result.stdout}",
+        }
+
+    logger.info("validate_app SUCCESS | all checks passed")
+    return {
+        "success": True,
+        "errors": [],
+        "message": "Validación completada: TypeScript OK, Build OK, Lint OK.",
+    }
