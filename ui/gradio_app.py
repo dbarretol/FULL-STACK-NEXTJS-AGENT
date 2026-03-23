@@ -5,6 +5,11 @@ La configuración de la UI se lee desde lib/config/settings.yaml (gradio section
 """
 import sys
 import os
+from dotenv import load_dotenv
+
+# Cargar variables de entorno antes de cualquier otra cosa
+load_dotenv()
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import gradio as gr
@@ -16,7 +21,7 @@ from main import build_agent, run_task
 
 def create_ui() -> gr.Blocks:
     """Crea la interfaz Gradio con historial de conversación persistente."""
-    sbx = Sandbox(timeout=cfg.sandbox.timeout_seconds)
+    sbx = Sandbox.create(timeout=cfg.sandbox.timeout_seconds)
     agent, model = build_agent(sbx)
 
     def chat(user_message: str, history: list) -> tuple[str, list]:
@@ -30,10 +35,10 @@ def create_ui() -> gr.Blocks:
         agent.messages = []
         return [], ""
 
-    with gr.Blocks(theme=gr.themes.Soft(), title="Agente Full Stack 🤖") as demo:
+    with gr.Blocks(title="Agente Full Stack 🤖") as demo:
         gr.Markdown("# 🤖 Agente Full Stack — Next.js + AWS Bedrock + E2B")
 
-        chatbot = gr.Chatbot(label="Conversación", height=500, bubble_full_width=False)
+        chatbot = gr.Chatbot(label="Conversación", height=500)
 
         with gr.Row():
             txt = gr.Textbox(
@@ -63,4 +68,4 @@ def create_ui() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    create_ui().launch(share=cfg.gradio.share, height=cfg.gradio.height)
+    create_ui().launch(share=cfg.gradio.share, height=cfg.gradio.height, theme=gr.themes.Soft())

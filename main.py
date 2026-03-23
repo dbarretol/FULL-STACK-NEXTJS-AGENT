@@ -3,6 +3,11 @@ Punto de entrada del agente Full Stack.
 Crea el sandbox E2B, construye el modelo desde lib.llm y lanza el agente Strands.
 Toda la configuración se lee desde lib/config/settings.yaml.
 """
+from dotenv import load_dotenv
+
+# Cargar variables de entorno (E2B_API_KEY, AWS, etc.) antes de inicializar nada
+load_dotenv()
+
 import lib.tools as tools_module
 from e2b_code_interpreter import Sandbox
 from strands import Agent
@@ -19,6 +24,7 @@ from lib.tools import (
     glob_files,
 )
 from lib.context_manager import maybe_compress
+from lib.hooks import MaxToolCallsHook
 from lib.prompts import SYSTEM_PROMPT_WEB_DEV
 
 _TOOLS = [execute_code, list_directory, read_file, write_file,
@@ -44,7 +50,7 @@ def build_agent(sbx: Sandbox) -> tuple[Agent, object]:
         model=model,
         system_prompt=SYSTEM_PROMPT_WEB_DEV,
         tools=_TOOLS,
-        max_handler_calls=cfg.agent.max_handler_calls,
+        hooks=[MaxToolCallsHook(max_calls=cfg.agent.max_tool_calls)],
     )
 
     return agent, model
@@ -68,7 +74,7 @@ def run_task(agent: Agent, model, query: str) -> str:
 def main() -> None:
     """Punto de entrada CLI: crea sandbox y ejecuta las tareas de prueba del FinalGoal."""
     print("🚀 Iniciando sandbox E2B...")
-    sbx = Sandbox(timeout=cfg.sandbox.timeout_seconds)
+    sbx = Sandbox.create(timeout=cfg.sandbox.timeout_seconds)
     print(f"✅ Sandbox activo: {sbx.sandbox_id}")
 
     agent, model = build_agent(sbx)

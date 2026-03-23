@@ -45,7 +45,7 @@ def load_settings() -> Settings:
             max_completion_tokens=model_raw.get("max_completion_tokens", 4096),
         ),
         agent=AgentConfig(
-            max_handler_calls=agent_raw.get("max_handler_calls", 30),
+            max_tool_calls=agent_raw.get("max_tool_calls", 30),
         ),
         context=ContextConfig(
             max_tokens=ctx_raw.get("max_tokens", 40_000),

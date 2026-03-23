@@ -16,7 +16,7 @@ class ModelConfig:
 
 @dataclass
 class AgentConfig:
-    max_handler_calls: int = 30
+    max_tool_calls: int = 30  # Límite total de llamadas a herramientas por tarea
 
 
 @dataclass

@@ -38,7 +38,7 @@ models:
 
 # --- Configuración del agente ---
 agent:
-  max_handler_calls: 30   # Pasos máximos por tarea (equivalente a max_steps)
+  max_tool_calls: 30  # Límite total de llamadas a herramientas por tarea (evita bucles infinitos)
 
 # --- Compresión de contexto ---
 context:
