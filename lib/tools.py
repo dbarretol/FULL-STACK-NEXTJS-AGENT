@@ -290,10 +290,8 @@ def run_command(command: str, workdir: str = "/home/user", timeout: int = 60) ->
 def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/app", port: int = 3000) -> dict:
     """Start a long-running dev server in the background, wait until it is ready, and return its public URL.
 
-    Launches the server, then polls the URL until it responds with HTTP 200 (or any non-connection-error
-    response), confirming the app is live before returning. Times out after 120 seconds.
-
-    Use this after the Next.js app is ready to preview it in the browser.
+    If the server is already running on the given port, returns the existing URL immediately without
+    relaunching. Use this only once per session — Next.js hot reload handles file changes automatically.
 
     Args:
         command: Command to start the server. Defaults to 'npm run dev'.
@@ -307,28 +305,32 @@ def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/ap
     import urllib.request
     import urllib.error
 
+    host = sbx.get_host(port)
+    url = f"https://{host}"
+
+    def _is_ready() -> bool:
+        try:
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                return resp.status < 500
+        except urllib.error.HTTPError as e:
+            return e.code < 500
+        except Exception:
+            return False
+
+    # Si ya está corriendo, devuelve la URL sin relanzar
+    if _is_ready():
+        return {"url": url, "ready": True, "success": True,
+                "message": f"Servidor ya estaba corriendo en {url}"}
+
     try:
         sbx.commands.run(command, cwd=workdir, background=True)
-        host = sbx.get_host(port)
-        url = f"https://{host}"
 
-        # Polling: espera hasta que el servidor responda
         deadline = time.time() + 120
-        interval = 3
         while time.time() < deadline:
-            try:
-                with urllib.request.urlopen(url, timeout=5) as resp:
-                    if resp.status < 500:
-                        return {"url": url, "ready": True, "success": True,
-                                "message": f"Servidor listo en {url}"}
-            except urllib.error.HTTPError as e:
-                # 4xx significa que el servidor está vivo aunque devuelva error
-                if e.code < 500:
-                    return {"url": url, "ready": True, "success": True,
-                            "message": f"Servidor listo en {url}"}
-            except Exception:
-                pass  # Conexión rechazada — servidor aún arrancando
-            time.sleep(interval)
+            if _is_ready():
+                return {"url": url, "ready": True, "success": True,
+                        "message": f"Servidor listo en {url}"}
+            time.sleep(3)
 
         return {"url": url, "ready": False, "success": False,
                 "error": "El servidor no respondió en 120 segundos. Verifica que la app compile sin errores."}
