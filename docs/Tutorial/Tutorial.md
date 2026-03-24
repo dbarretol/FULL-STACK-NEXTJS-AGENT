@@ -1,31 +1,45 @@
- inciamos el agente con este omando: uv run python -m ui.gradio_app     
+Iniciamos el agente con este comando:
 
- esperamos que levante la isntancia y vamos a  http://127.0.0.1:7860
+```bash
+uv run python -m ui.gradio_app
+```
 
- veremos esta imagen:
+Esperamos que levante la instancia y vamos a:
 
- ![alt text](image.png)
+- http://127.0.0.1:7860
 
-Dale una isntruccion basica como "“Créame una app básica que permita al usuario escribir dos números y tener un botón que los sume y me muestre el resultado.”" (puede ser un puedido mas complejo, pero hgastara mas tokens)
+Veremos esta imagen:
 
-El agente empezara a trabajr
+![alt text](image.png)
+
+Dale una instrucción básica como:
+
+> "Créame una app básica que permita al usuario escribir dos números, tener un botón que los sume y me muestre el resultado."
+
+(Puede ser un pedido más complejo, pero gastará más tokens.)
+
+El agente empezará a trabajar:
 
 ![alt text](image-1.png)
 
-En cosnola se podra ver que esta haciendo el agente:
+En consola se podrá ver qué está haciendo el agente:
 
 ![alt text](image-2.png)
 
-y dara el resultado:
+Y dará el resultado:
 
 ![alt text](image-3.png)
 
-en elenalce que da se peude acceder a la version en vivo de la app:
+En el enlace que da se puede acceder a la versión en vivo de la app:
+
 ![alt text](image-4.png)
 
-ahroa pdoemos pedirle, por ejemplo "Agrega un botón que permita multiplicar dichos números, además del botón de suma."
+Ahora podemos pedirle, por ejemplo:
+
+> "Agrega un botón que permita multiplicar dichos números, además del botón de suma."
 
 ![alt text](image-5.png)
 
-y me muestra la version en vivo nuevamente
+Y me muestra la versión en vivo nuevamente...
 
+> **En proceso de solución:** actualmente genera bien las primeras versiones de la app, pero al solicitar cambios el agente cree haberlos realizado y el resultado es una app sin estilos CSS, solo HTML básico. Y por más que el agente revisa varias veces, no detecta ningún problema. Posiblemente el problema sea con el entorno E2B.
