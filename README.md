@@ -1,3 +1,8 @@
+
+> Actualmente el agente solo trabaj con modelos de Gemini, ver [Tutorial](docs/Tutorial/Tutorial.md)
+
+---
+
 # 🤖 Agente de Código Full Stack
 
 Este proyecto es un agente de IA diseñado para generar aplicaciones web completas utilizando **Next.js**, **TypeScript** y **Tailwind CSS**. Implementa una estrategia de **Runtime Summary** para gestionar contextos largos de hasta 40,000 tokens mediante compresión automática del historial.
