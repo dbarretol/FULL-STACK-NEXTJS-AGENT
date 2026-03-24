@@ -40,6 +40,9 @@ def main() -> None:
     print("🚀 Iniciando sandbox E2B...")
     sbx = Sandbox.create(timeout=cfg.sandbox.timeout_seconds)
     print(f"✅ Sandbox activo: {sbx.sandbox_id}")
+    with open(".sandbox_id", "w") as f:
+        f.write(sbx.sandbox_id)
+    print("📝 Sandbox ID guardado en .sandbox_id")
 
     system = build_multi_agent_system(sbx)
 

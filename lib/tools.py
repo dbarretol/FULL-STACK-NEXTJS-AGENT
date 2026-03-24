@@ -6,8 +6,6 @@ Los límites y constantes se leen desde lib.config.cfg.
 import json
 import logging
 import time
-import urllib.request
-import urllib.error
 from e2b_code_interpreter import Sandbox
 from strands import tool
 from lib.config import cfg
@@ -344,126 +342,18 @@ def run_command(command: str, workdir: str = "/home/user", timeout: int = 60) ->
 
 
 @tool
-def start_dev_server(command: str = "npm run dev", workdir: str = "/home/user/app", port: int = 3000) -> dict:
-    """Start a long-running dev server in the background, wait until it is ready, and return its public URL.
-
-    If the server is already running on the given port, returns the existing URL immediately without
-    relaunching. Use this only once per session — Next.js hot reload handles file changes automatically.
-
-    Args:
-        command: Command to start the server. Defaults to 'npm run dev'.
-        workdir: Directory where the command runs. Defaults to /home/user/app.
-        port: Port the server listens on. Defaults to 3000.
-
-    Returns:
-        Dict with url (public preview URL), ready (bool), and success flag.
-    """
-    host = sbx.get_host(port)
-    url = f"https://{host}"
-    logger.info("start_dev_server | cmd=%s workdir=%s port=%d url=%s", command, workdir, port, url)
-
-    def _is_ready() -> bool:
-        try:
-            with urllib.request.urlopen(url, timeout=5) as resp:
-                return resp.status < 500
-        except urllib.error.HTTPError as e:
-            return e.code < 500
-        except Exception:
-            return False
-
-    def _page_compiled() -> bool:
-        """Verifica que la página principal ya compiló leyendo el HTML de respuesta."""
-        try:
-            with urllib.request.urlopen(url, timeout=10) as resp:
-                if resp.status >= 500:
-                    return False
-                html = resp.read(4096).decode("utf-8", errors="ignore")
-                # Next.js App Router no usa __NEXT_DATA__, usa streaming de cuerpo.
-                # Buscamos etiquetas básicas que indiquen que el HTML no es un error de E2B.
-                return any(m in html for m in ["<main", "<div", "<body", "<h1", "Next.js"])
-        except urllib.error.HTTPError as e:
-            return e.code < 500
-        except Exception:
-            return False
-
-    # Si ya está corriendo, matamos para asegurar que tome el último build (.next)
-    if _is_ready():
-        logger.info("start_dev_server | already running, restarting to ensure latest build | url=%s", url)
-        # Matamos procesos previos de node para liberar el puerto 3000
-        _run("pkill -9 -f node || true")
-        time.sleep(2)
-
-    # Detección automática de build: si existe .next, preferimos 'npm run start' (más estable/rápido)
-    check_build = _run(f"import os; print(os.path.isdir('{workdir}/.next'))")
-    has_build = "True" in "".join(check_build["stdout"])
-    
-    if command == "npm run dev" and has_build:
-        command = "npm run start"
-        logger.info("start_dev_server | build detected, switching to production mode: %s", command)
-
-    # Forzar binding a 0.0.0.0 para Next.js si es el comando por defecto
-    if command in ["npm run dev", "npm run start"]:
-        command = f"{command} -- -H 0.0.0.0"
-
-    try:
-        if not _is_ready():
-            logger.info("start_dev_server LAUNCHING | cmd=%s", command)
-            sbx.commands.run(command, cwd=workdir, background=True)
-
-        # Fase 1: espera a que el servidor levante
-        deadline = time.monotonic() + 120
-        attempt = 0
-        while time.monotonic() < deadline:
-            attempt += 1
-            if _is_ready():
-                logger.info("start_dev_server SERVER UP | url=%s attempts=%d", url, attempt)
-                break
-            logger.debug("start_dev_server polling server | attempt=%d", attempt)
-            time.sleep(3)
-        else:
-            logger.error("start_dev_server TIMEOUT waiting for server | url=%s", url)
-            return {"url": url, "ready": False, "success": False,
-                    "error": "El servidor no levantó en 120 segundos."}
-
-        # Fase 2: espera a que la página principal compile (Next.js compila on-demand en dev)
-        # En producción (npm run start) es instantáneo, pero igual verificamos.
-        logger.info("start_dev_server waiting for page compile/hydration | url=%s", url)
-        compile_deadline = time.monotonic() + 60
-        compile_attempt = 0
-        while time.monotonic() < compile_deadline:
-            compile_attempt += 1
-            if _page_compiled():
-                elapsed = 120 - (deadline - time.monotonic())
-                logger.info("start_dev_server PAGE READY | url=%s compile_attempts=%d",
-                            url, compile_attempt)
-                return {"url": url, "ready": True, "success": True,
-                        "message": f"Servidor listo en {url}"}
-            logger.debug("start_dev_server waiting compile | attempt=%d", compile_attempt)
-            time.sleep(3)
-
-        # Si no detectamos markers pero el servidor responde, devolvemos success
-        logger.warning("start_dev_server compile check inconclusive, but server is up | url=%s", url)
-        return {"url": url, "ready": True, "success": True,
-                "message": f"Servidor listo en {url} (verificación de hidratación pendiente)"}
-
-    except Exception as e:
-        logger.error("start_dev_server EXCEPTION | error=%s", e)
-        return {"error": str(e), "success": False}
-
-
-@tool
 def validate_app() -> dict:
-    """Valida la app Next.js ejecutando checks de calidad: TypeScript, build y linter.
+    """Validate the Next.js app by running quality checks: TypeScript, build, and linter.
 
-    Ejecuta secuencialmente:
-    1. npx tsc --noEmit (verifica tipos)
-    2. npm run build (verifica que compila)
-    3. npm run lint (verifica estilo)
+    Runs sequentially:
+    1. npx tsc --noEmit (type checking)
+    2. npm run build (full Next.js compilation — catches runtime errors tsc misses)
+    3. npm run lint (code style)
 
-    Si alguno falla, devuelve los errores completos para que el agente los corrija.
+    Does NOT start any server — server management is handled externally.
 
     Returns:
-        Dict con success (bool), errors (list), y message descriptivo.
+        Dict with success (bool), errors (list), and descriptive message.
     """
     logger.info("validate_app | starting validation checks")
 
@@ -478,32 +368,30 @@ def validate_app() -> dict:
         }
     logger.info("validate_app OK | tsc passed")
 
-    # Check 2: Build
+    # Check 2: Build completo de Next.js (detecta errores de runtime que tsc no ve)
     result = sbx.commands.run("npm run build", cwd="/home/user/app", timeout=120)
     if result.exit_code != 0:
         logger.warning("validate_app FAILED | build errors\n%s", result.stderr or result.stdout)
         return {
             "success": False,
             "errors": ["Build failed", result.stderr or result.stdout],
-            "message": f"Error en el build:\n{result.stderr or result.stdout}",
+            "message": f"Error en el build de Next.js:\n{result.stderr or result.stdout}",
         }
     logger.info("validate_app OK | build passed")
 
-    # Check 3: Lint (opcional, pero recomendado)
+    # Check 3: Lint
     result = sbx.commands.run("npm run lint", cwd="/home/user/app", timeout=60)
     if result.exit_code != 0:
         logger.warning("validate_app WARNING | lint issues\n%s", result.stderr or result.stdout)
         return {
             "success": True,
             "errors": ["Lint warnings", result.stderr or result.stdout],
-            "message": f"Advertencias de lint detectadas (la app funciona):\n{result.stderr or result.stdout}",
+            "message": f"Advertencias de lint (la app es funcional):\n{result.stderr or result.stdout}",
         }
 
     logger.info("validate_app SUCCESS | all checks passed")
     return {
         "success": True,
         "errors": [],
-        "message": "Validación completada: TypeScript OK, Build OK, Lint OK.\n"
-                   "IMPORTANTE: Como estás en modo PRODUCCION (npm run start), debes llamar a "
-                   "start_dev_server de nuevo para que el usuario pueda ver estos cambios.",
+        "message": "Validación completada: TypeScript OK, Build OK, Lint OK. El código está listo.",
     }
