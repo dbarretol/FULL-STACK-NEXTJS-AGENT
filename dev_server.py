@@ -102,22 +102,36 @@ def main() -> None:
     except Exception:
         pass
 
-    # Lanza el servidor con background=True (E2B mantiene el proceso vivo)
-    log_file = "/tmp/dev_server.log"
-    print(f"🚀 Iniciando: npm run dev -- -H 0.0.0.0")
-    proc = sbx.commands.run(
-        "npm run dev -- -H 0.0.0.0",
-        cwd=WORKDIR,
-        background=True,
-    )
-    time.sleep(5)
-    # Leer output inicial del proceso background
+    # Restaura next.config.ts limpio (el anterior puede estar corrupto)
+    next_config = """import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* config options here */
+};
+
+export default nextConfig;
+"""
     try:
-        log = sbx.commands.run(f"cat {log_file} 2>/dev/null", timeout=5)
-        if log.stdout.strip():
-            print(f"   📋 Log inicial:\n   " + log.stdout.strip().replace("\n", "\n   "))
-    except Exception:
-        pass
+        sbx.files.write(f"{WORKDIR}/next.config.ts", next_config)
+        print("   ✅ next.config.ts restaurado")
+    except Exception as e:
+        print(f"   ⚠️  No se pudo restaurar next.config.ts: {e}")
+
+    # Build de producción + start (dev mode tiene HMR roto en E2B, rompe hidratación)
+    print("🔨 Compilando app (build de producción)...")
+    try:
+        build = sbx.commands.run("npm run build", cwd=WORKDIR, timeout=120)
+        if build.exit_code != 0:
+            print(f"   ❌ Build falló:\n{build.stdout[-1000:]}")
+            return
+        print("   ✅ Build OK")
+    except Exception as e:
+        print(f"   ❌ Build error: {e}")
+        return
+
+    # Lanza el servidor de producción con background=True
+    print(f"🚀 Iniciando servidor de producción (puerto {PORT})...")
+    sbx.commands.run("npm run start -- -H 0.0.0.0", cwd=WORKDIR, background=True)
 
     # Espera a que el servidor esté listo
     print(f"⏳ Esperando que el servidor levante (máx {SERVER_TIMEOUT}s)...")
@@ -132,8 +146,8 @@ def main() -> None:
         # Mostrar estado del puerto cada 15s para diagnóstico
         if attempt % 5 == 0:
             try:
-                log = sbx.commands.run(f"tail -8 {log_file} 2>/dev/null", timeout=5)
-                print(f"\n   📋 Log ({attempt * POLL_INTERVAL}s):\n   " + (log.stdout.strip() or "(vacío)").replace("\n", "\n   "))
+                status = sbx.commands.run(f"ss -tlnp 2>/dev/null | grep {PORT} || echo 'puerto {PORT} no activo'", timeout=5)
+                print(f"\n   📋 Puerto ({attempt * POLL_INTERVAL}s): {status.stdout.strip()}")
             except Exception:
                 pass
         print(f"   [{attempt * POLL_INTERVAL}s] Esperando...", end="\r")
