@@ -6,6 +6,7 @@ El orquestador no implementa código directamente — solo coordina.
 import logging
 from strands import Agent
 from strands.tools import tool
+from strands.handlers.callback_handler import null_callback_handler
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 
 from lib.config import cfg
@@ -18,6 +19,7 @@ from lib.agents.sub_agents.backend.agent import build_backend_agent
 from lib.agents.sub_agents.uiux.agent import build_uiux_agent
 from lib.agents.sub_agents.qa.agent import build_qa_agent
 from lib.agents.sub_agents.context.agent import build_context_agent
+from lib.smart_logging import SmartLoggingHook
 import lib.tools as tools_module
 from e2b_code_interpreter import Sandbox
 
@@ -53,6 +55,18 @@ class MultiAgentSystem:
         self._qa = build_qa_agent(self._model)
         self._context = build_context_agent(self._model)
 
+        # Configurar Smart Logging para todos los agentes
+        # Desactivamos el callback_handler por defecto y añadimos nuestro hook de narrativa
+        for agent, name in [
+            (self._frontend, "frontend_agent"),
+            (self._backend, "backend_agent"),
+            (self._uiux, "uiux_agent"),
+            (self._qa, "qa_agent"),
+            (self._context, "context_agent"),
+        ]:
+            agent.callback_handler = null_callback_handler
+            agent.hooks.add_hook(SmartLoggingHook(name))
+
         # Construir herramientas de delegación
         agent_tools = self._build_agent_tools()
 
@@ -63,7 +77,10 @@ class MultiAgentSystem:
             tools=agent_tools,
             hooks=[MaxToolCallsHook(max_calls=cfg.agent.max_tool_calls * 3)],
             conversation_manager=SlidingWindowConversationManager(window_size=200),
+            callback_handler=None, # Silenciar salida por defecto del orquestador
         )
+        self._orchestrator.hooks.add_hook(SmartLoggingHook("orchestrator"))
+
         logger.info("MultiAgentSystem | orquestador listo con %d herramientas de delegación",
                     len(agent_tools))
 
