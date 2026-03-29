@@ -20,6 +20,7 @@ from lib.agents.sub_agents.uiux.agent import build_uiux_agent
 from lib.agents.sub_agents.qa.agent import build_qa_agent
 from lib.agents.sub_agents.context.agent import build_context_agent
 from lib.smart_logging import SmartLoggingHook
+from lib.deployer import AppDeployer
 import lib.tools as tools_module
 from e2b_code_interpreter import Sandbox
 
@@ -233,6 +234,15 @@ class MultiAgentSystem:
         result = str(self._orchestrator(query))
         logger.info("MultiAgentSystem.run END | response_len=%d", len(result))
         return result
+
+    def deploy(self) -> str:
+        """Inicia el proceso de compilación y despliegue automatizado.
+        
+        Returns:
+            URL pública de la aplicación o mensaje de error.
+        """
+        deployer = AppDeployer(self._sbx)
+        return deployer.deploy()
 
     def reset(self) -> None:
         """Limpia el historial de todos los agentes para iniciar una nueva sesión."""

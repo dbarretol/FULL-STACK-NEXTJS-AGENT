@@ -32,11 +32,37 @@ def create_ui() -> gr.Blocks:
         history.append({"role": "user", "content": user_message})
         return "", history
 
-    def bot_response(history: list) -> list:
+    def bot_response(history: list):
+        """Generador para mostrar el progreso de la tarea y el despliegue final."""
         user_message = history[-1]["content"]
+        
+        # 1. Ejecutar la tarea del agente (esto ya lo hace bien)
         reply = system.run(user_message)
         history.append({"role": "assistant", "content": reply})
-        return history
+        yield history
+        
+        # 2. Iniciar despliegue automático
+        # Mostramos un mensaje de estado intermedio
+        history[-1]["content"] += "\n\n---\n🔨 **Iniciando compilación y despliegue en E2B...** (esto puede tardar 1-2 min)"
+        yield history
+        
+        # Ejecutar el despliegue (build + start)
+        deploy_result = system.deploy()
+        
+        if deploy_result.startswith("http"):
+            # Éxito: Mostrar enlace clickable
+            history[-1]["content"] = history[-1]["content"].replace(
+                "🔨 **Iniciando compilación y despliegue en E2B...** (esto puede tardar 1-2 min)",
+                f"✅ **Aplicación desplegada exitosamente:**\n\n[🌐 Abrir Aplicación]({deploy_result})"
+            )
+        else:
+            # Error: Mostrar mensaje de error detallado
+            history[-1]["content"] = history[-1]["content"].replace(
+                "🔨 **Iniciando compilación y despliegue en E2B...** (esto puede tardar 1-2 min)",
+                f"❌ **Error durante el despliegue:**\n\n{deploy_result}"
+            )
+        
+        yield history
 
     def reset() -> tuple[list, str]:
         system.reset()
