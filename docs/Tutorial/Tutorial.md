@@ -1,6 +1,6 @@
 # Tutorial para probar el sistema multiagente
 
-> **Nota:** Por el momento, el proyecto solo ha sido probado con **Gemini de Google**, aunque ya existen configuraciones para otros proveedores dentro del directorio [`lib/llm`](lib/llm).
+> **Nota:** Por el momento, el proyecto solo ha sido probado con **Gemini de Google**, aunque ya existen configuraciones para otros proveedores dentro del directorio [`lib/llm`](../../lib/llm/).
 
 ## 1. Iniciar la aplicación
 
@@ -88,4 +88,4 @@ Y podrás acceder otra vez a la versión en vivo de la página:
 
 Si quieres revisar el historial de mensajes mostrados en consola durante este tutorial, puedes consultarlo en:
 
-[`docs/Tutorial/log.txt`](docs/Tutorial/log.txt)
+[`docs/Tutorial/log.txt`](log.txt)

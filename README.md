@@ -52,7 +52,7 @@ graph TB
 
 - **Python 3.12+** con `uv` ([astral.sh/uv](https://astral.sh/uv))
 - **E2B API Key** ([e2b.dev](https://e2b.dev/))
-- **LLM Provider**: Bedrock (predeterminado), OpenAI, Anthropic, Gemini o LlamaAPI
+- **LLM Provider**: Gemini (predeterminado), ## OpenAI, Anthropic, Bedrock o LlamaAPI estan creados pero no testeados
 
 ### 1. Instalación
 
@@ -204,22 +204,22 @@ graph LR
     Config["cfg.llm_provider"]
     Factory["factory.build_model()"]
     
-    Bedrock["AWS Bedrock"]
+    Gemini["Google Gemini"]
     Anthropic["Anthropic Claude"]
     OpenAI["OpenAI GPT"]
-    Gemini["Google Gemini"]
+    Bedrock["AWS Bedrock"]
     LlamaAPI["LlamaAPI"]
     
-    Config -->|"bedrock"| Factory
+    Config -->|"gemini"| Factory
     Config -->|"anthropic"| Factory
     Config -->|"openai"| Factory
-    Config -->|"gemini"| Factory
+    Config -->|"bedrock"| Factory
     Config -->|"llamaapi"| Factory
     
-    Factory -->|"Retorna"| Bedrock
+    Factory -->|"Retorna"| Gemini
     Factory -->|"Retorna"| Anthropic
     Factory -->|"Retorna"| OpenAI
-    Factory -->|"Retorna"| Gemini
+    Factory -->|"Retorna"| Bedrock
     Factory -->|"Retorna"| LlamaAPI
 ```
 
