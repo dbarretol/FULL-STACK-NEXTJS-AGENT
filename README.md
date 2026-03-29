@@ -1,8 +1,13 @@
 > ⚠️ **Nota sobre LLM Providers**: Actualmente, el agente principal está optimizado para Gemini. Se han implementado clientes para AWS Bedrock, OpenAI, Anthropic y LlamaAPI. Si usas Gemini, asegúrate de usar una API key con facturación en [AI Studio](https://aistudio.google.com) (las keys gratuitas se agotan rápidamente).
 
+
 ---
 
 # 🤖 Agente de Código Full Stack
+
+> ver [Tutorial](docs/Tutorial/Tutorial.md)
+
+> Requiaitos: necesitas tener al menos: **GOOGLE_API_KEY** y **E2B_API_KEY** en tu archivo **.env** para pdoer ejecutar este proyecto
 
 Un **sistema multi-agente de IA** diseñado para generar, validar y desplegar aplicaciones web completas con **Next.js**, **TypeScript** y **Tailwind CSS**. Implementa compresión automática de contexto para gestionar conversaciones de hasta **40,000 tokens**.
 
